@@ -48,36 +48,36 @@ func BuildScanHandler(options ScanHandlerOptions) http.HandlerFunc {
 }
 
 func RunScanWithCallbacks(pattern string, startingCursor uint64, redisClient *redis.Client, callbackKeys ...string) ([]string, uint64, error) {
-	ctx := context.Background()
-	keys := make([]string, 0)
-	cursor := startingCursor
+    ctx := context.Background()
+    keys := make([]string, 0)
+    cursor := startingCursor
 
-	callbacks := callbacks.NewCallbacks()
+    cbx := callbacks.NewCallbacks()
 
-	for {
-		var err error
-		keys, cursor, err = redisClient.Scan(ctx, cursor, pattern, 10).Result()
-		if err != nil {
-			return nil, 0, fmt.Errorf("error during scan: %v", err)
-		}
+    for {
+        var err error
+        keys, cursor, err = redisClient.Scan(ctx, cursor, pattern, 10).Result()
+        if err != nil {
+            return nil, 0, fmt.Errorf("error during scan: %v", err)
+        }
 
-		for _, key := range keys {
-			for _, callbackKey := range callbackKeys {
-				callbackFunc, ok := callbacks.GetCallbackFunc(callbackKey)
-				if ok {
-					_, err := callbackFunc(redisClient, key)
-					if err != nil {
-						fmt.Printf("error executing callback for key %s: %v\n", key, err)
-					}
-				}
-			}
-		}
+        for _, key := range keys {
+            for _, callbackKey := range callbackKeys {
+                callbackFunc, ok := cbx.GetCallbackFunc(callbackKey)
+                if ok {
+                    _, err := callbackFunc(redisClient, key)
+                    if err != nil {
+                        fmt.Printf("error executing callback for key %s: %v\n", key, err)
+                    }
+                }
+            }
+        }
 
-		if cursor == 0 {
-			break
-		}
-	}
-	return keys, cursor, nil
+        if cursor == 0 {
+            break
+        }
+    }
+    return keys, cursor, nil
 }
 
 func parseCursor(cursorStr string) uint64 {
