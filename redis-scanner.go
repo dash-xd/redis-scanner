@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/dash-xd/redis-scan-callbacks"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 func LazyLoadRedis(client *redis.Client) (*callbacks.Callbacks, error) {
