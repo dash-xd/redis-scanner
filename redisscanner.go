@@ -1,3 +1,5 @@
+// redisscanner package
+
 package redisscanner
 
 import (
@@ -19,7 +21,6 @@ type ScanHandlerOptions struct {
 	Pattern      string
 	RedisClient  *redis.Client
 	CallbackKeys []string
-	Callbacks    *callbacks.Callbacks
 }
 
 func BuildScanHandler(options ScanHandlerOptions) http.HandlerFunc {
@@ -31,7 +32,7 @@ func BuildScanHandler(options ScanHandlerOptions) http.HandlerFunc {
 
 		pattern := fmt.Sprintf(options.Pattern, options.Entity, envParam, parentNamespaceParam, childNamespaceParam)
 
-		keys, nextCursor, err := RunScan(pattern, parseCursor(startingCursorParam), options.RedisClient, options.Callbacks, options.CallbackKeys...)
+		keys, nextCursor, err := RunScanWithCallbacks(pattern, parseCursor(startingCursorParam), options.RedisClient, options.CallbackKeys...)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -48,10 +49,12 @@ func BuildScanHandler(options ScanHandlerOptions) http.HandlerFunc {
 	}
 }
 
-func RunScan(pattern string, startingCursor uint64, redisClient *redis.Client, callbacks *callbacks.Callbacks, callbackKeys ...string) ([]string, uint64, error) { 
+func RunScanWithCallbacks(pattern string, startingCursor uint64, redisClient *redis.Client, callbackKeys ...string) ([]string, uint64, error) {
 	ctx := context.Background()
 	keys := make([]string, 0)
 	cursor := startingCursor
+
+	callbacks := callbacks.NewCallbacks()
 
 	for {
 		var err error
@@ -62,7 +65,8 @@ func RunScan(pattern string, startingCursor uint64, redisClient *redis.Client, c
 
 		for _, key := range keys {
 			for _, callbackKey := range callbackKeys {
-				if callbackFunc, ok := callbacks.CallbackMap[callbackKey]; ok {
+				callbackFunc, ok := callbacks.GetCallbackFunc(callbackKey)
+				if ok {
 					_, err := callbackFunc(redisClient, key)
 					if err != nil {
 						fmt.Printf("error executing callback for key %s: %v\n", key, err)
