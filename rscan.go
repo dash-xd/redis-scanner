@@ -1,4 +1,4 @@
-package redisscanner
+package rscan
 
 import (
 	"context"
