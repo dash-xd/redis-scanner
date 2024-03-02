@@ -1,9 +1,8 @@
-// redis-scanner package
-
 package redis-scanner
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,6 +10,42 @@ import (
 	"github.com/dash-xd/redis-scan-callbacks"
 	"github.com/redis/go-redis/v9"
 )
+
+type ScanHandlerOptions struct {
+	Env          string
+	ParentNS     string
+	ChildNS      string
+	Entity       string
+	Pattern      string
+	RedisClient  *redis.Client
+	CallbackKeys []string
+}
+
+func BuildScanHandler(options ScanHandlerOptions) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		envParam := r.URL.Query().Get(options.Env)
+		parentNamespaceParam := r.URL.Query().Get(options.ParentNS)
+		childNamespaceParam := r.URL.Query().Get(options.ChildNS)
+		startingCursorParam := r.URL.Query().Get("cursor")
+
+		pattern := fmt.Sprintf(options.Pattern, options.Entity, envParam, parentNamespaceParam, childNamespaceParam)
+
+		keys, nextCursor, err := RunScan(pattern, parseCursor(startingCursorParam), options.RedisClient, options.CallbackKeys...)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		jsonResponse := struct {
+			Keys   []string `json:"keys"`
+			Cursor uint64   `json:"cursor"`
+		}{
+			Keys:   keys,
+			Cursor: nextCursor,
+		}
+		json.NewEncoder(w).Encode(jsonResponse)
+	}
+}
 
 func RunScan(pattern string, startingCursor uint64, redisClient *redis.Client, callbackKeys ...string) ([]string, uint64, error) {
 	ctx := context.Background()
@@ -40,32 +75,6 @@ func RunScan(pattern string, startingCursor uint64, redisClient *redis.Client, c
 		}
 	}
 	return keys, cursor, nil
-}
-
-func ScanHandlerBuilder(env, parentNamespace, childNamespace, entity, pattern string, redisClient *redis.Client, callbackKeys ...string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		envParam := r.URL.Query().Get(env)
-		parentNamespaceParam := r.URL.Query().Get(parentNamespace)
-		childNamespaceParam := r.URL.Query().Get(childNamespace)
-		startingCursorParam := r.URL.Query().Get("cursor")
-
-		pattern := fmt.Sprintf(pattern, entity, envParam, parentNamespaceParam, childNamespaceParam)
-
-		keys, nextCursor, err := RunScan(pattern, parseCursor(startingCursorParam), redisClient, callbackKeys...)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		jsonResponse := struct {
-			Keys   []string `json:"keys"`
-			Cursor uint64   `json:"cursor"`
-		}{
-			Keys:   keys,
-			Cursor: nextCursor,
-		}
-		json.NewEncoder(w).Encode(jsonResponse)
-	}
 }
 
 func parseCursor(cursorStr string) uint64 {
