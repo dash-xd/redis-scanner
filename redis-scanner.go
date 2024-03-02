@@ -1,4 +1,4 @@
-package redis-scanner
+package redisscanner
 
 import (
 	"context"
